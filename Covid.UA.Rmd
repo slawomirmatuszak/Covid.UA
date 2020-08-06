@@ -1,0 +1,622 @@
+---
+title: "Covid Ukraina"
+author: "Sławomir Matuszak"
+date: '`r format(Sys.Date(), "%d-%m-%Y")`'
+output: 
+  html_document:
+    toc: true
+    toc_float :
+      collapsed: true
+    toc_deph: 6
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F)
+```
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(sf)
+library(tmap)
+library(tmaptools)
+library(rmapshaper)
+library(ggiraph)
+library(cowplot)
+library(rgeos)
+library(rgdal)
+library(scales)
+library(ggrepel)
+library(ggiraph)
+```
+
+```{r}
+#zakazenia w obwodach
+load("E:/R/Covid.Ukraina/dane/obwody.wide.Rda")
+# dane o testach
+load("E:/R/Covid.Ukraina/dane/testy.Rda")
+```
+
+```{r, include=FALSE}
+shp1 <- readOGR("E:/R/Covid.Ukraina/mapa", layer = "obwod_pl")
+```
+
+
+```{r}
+#upraszczamy widok
+shp1 <- ms_simplify(shp1)
+#zmieniamy format danych
+shp1f <- fortify(shp1, region = "ADM1_PCODE")
+
+```
+
+```{r}
+a <- obwody.wide %>%
+  filter(data== max(data)) %>%
+  group_by(obwod, Kod, data, long,lat)%>%
+  summarise(
+    liczba = sum(suma.chorych),
+    data2 = max(data)+1
+  ) 
+
+d <- a %>%
+  arrange(desc(liczba))
+
+b <- obwody.wide %>%
+  filter(data== max(data))
+
+c <- obwody.wide %>%
+  filter(data== max(data))
+
+
+```
+
+
+## Sytuacja ogólna
+
+Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="sierpień", paste("sierpnia"), paste("września")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja rozpoczął się systematyczny wzrost, który pod koniec lipca przekroczył poziom 1000 zakażeń dziennie. 
+
+
+```{r średnia krocząca dla UA}
+#średnia krocząca dla UA
+a <- obwody.wide %>%
+  ungroup()%>%
+  group_by(data)%>%
+  summarise(
+    nowe.zach=sum(nowe.suma.chorych),
+    aktywni.zach = sum(suma.aktywnych)
+  )%>%
+  mutate(srednia = zoo::rollmean(nowe.zach, k=7, fill=NA, align="right"))%>%
+  filter(srednia !=is.na(srednia))%>%
+  mutate(etykieta = paste0("zakażeni - ", round(srednia,0), "\ndata - ", data),
+         etykieta2 = paste0("aktywni - ", aktywni.zach, "\ndata - ", data))
+```
+
+```{r}
+wykres <- ggplot(a, aes(x=data, y=srednia))+
+  geom_line(size=1.5, alpha=0.8, color="blue3") +
+  labs(x="", 
+       y="nowe zakażenia",
+       color="",
+       title = "Liczba dziennych zakażeń* na Ukrainie",
+       caption = "Dane: Ministerstwo Zdrowia Ukrainy \n*średnia ruchoma z 7 dni")+
+  theme_bw()+
+  theme(legend.position = "none", plot.caption = element_text( size = 8), plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+        plot.background = element_rect(colour = "grey", size = 0.5))
+
+my_gg <- wykres + 
+  geom_point_interactive(aes(tooltip = etykieta),size = 2, color="blue")
+
+#girafe( ggobj = plot_grid(my_gg1, my_gg2), width_svg = 8, height_svg = 4)
+girafe(code = print(my_gg),width_svg = 8, height_svg = 3 )
+```
+
+Liczba aktywnych zakażonych (czyli tych, którzy nie wyzdrowieli, bądź nie zmarli) wynosi  **`r format(sum(c$suma.aktywnych), big.mark=",")`**. Choć jest to liczba mniejsza, niż osób, które wyzdrowiały (**`r format(sum(c$suma.wyzdrowien), big.mark=",")`**), jednak systematycznie się zwiększa, co świadczy o tym, że nie ma oznak wygaszania epidemii. 
+
+```{r}
+wykres <- ggplot(a, aes(x=data, y=aktywni.zach))+
+  geom_line(size=1.5, alpha=0.8, color="blue3") +
+  labs(x="", 
+       y="",
+       color="",
+       title = "Liczba aktywnych zakażonych na Ukrainie",
+       caption = "Dane: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  theme(legend.position = "none", plot.caption = element_text( size = 8), plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+        plot.background = element_rect(colour = "grey", size = 0.5))
+
+my_gg <- wykres + 
+  geom_point_interactive(aes(tooltip = etykieta2),size = 2, color="blue")
+
+girafe(code = print(my_gg),width_svg = 8, height_svg = 3 )
+```
+
+### Statystyka zgonów
+
+```{r}
+load("E:/R/Covid.Ukraina/dane/szpitale.zgony.Rda")
+
+powyzej.60 <- szpitale.zgony %>%
+  filter(person_age_group %in% c("60-69", "70-79", "80-89", "90+"))%>%
+  summarise(
+    zgony = sum(new_death)
+  )%>% 
+  pull()
+  
+ponizej.60 <- szpitale.zgony %>%
+  filter(!person_age_group %in% c("60-69", "70-79", "80-89", "90+"))%>%
+  summarise(
+    zgony = sum(new_death)
+  )%>%
+  pull()
+
+zgony.grupa.wiekowa <- szpitale.zgony %>%
+  group_by(person_age_group)%>%
+  summarise(zgony=sum(new_death))%>%
+  mutate(etykieta = paste0("wiek - ", person_age_group, "\nzgony - ", zgony))
+```
+
+Od początku epidemii na Ukrainie zmarło na Covid-19 **`r sum(b$suma.zgonow)`** osób. Zdecydowana większość z nich (**`r powyzej.60`** osób, co stanowi **`r paste0(round(powyzej.60/sum(b$suma.zgonow)*100,1),"%")`**) była w wieku 60-ciu lub więcej lat. 
+
+```{r}
+wykres <- ggplot(zgony.grupa.wiekowa)+
+  #geom_col())+
+  coord_flip()+
+  labs(fill="", y="", x="", 
+       title = "Porównanie ilości zgonów w zależności od grupy wiekowej",
+       caption = "Źródło: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5))
+
+my_gg <- wykres + 
+  geom_col_interactive(aes(x=person_age_group, y=zgony, tooltip = etykieta), fill="blue")
+
+girafe(code = print(my_gg),width_svg = 8, height_svg = 3 )
+```
+
+```{r}
+choroby.wspol <- szpitale.zgony %>%
+  filter(add_conditions=="choroby współistniejące")%>%
+  summarise(
+    zgony = sum(new_death)
+  )%>% 
+  pull()
+  
+choroby.wspol.brak <- szpitale.zgony %>%
+  filter(add_conditions!="choroby współistniejące")%>%
+  summarise(
+    zgony = sum(new_death)
+  )%>% 
+  pull()
+```
+
+
+Poza wiekiem, drugim czynnikiem wpływającym na ilość zgonów na Covid-19 jest obecność chorób współistniejących (dotyczy to **`r choroby.wspol`** zmarłych osób, czyli **`r paste0(round(choroby.wspol/sum(b$suma.zgonow)*100,1),"%")`**). Ma to ogromne znaczenie we wskaźniku śmiertelności, który jest bardzo niski dla osób poniżej 60 roku życia, bez chorób współistniejących i wysoki dla osób z takimi chorobami, szczególnie w starszym wieku. 
+
+
+```{r}
+a <- szpitale.zgony %>%
+  mutate(etykieta = paste0("śmiertelność - ", round(smiertelnosc*100,1), "%","\nzgony - ", new_death))
+
+wykres <- ggplot(a)+
+  geom_col(aes(x=person_age_group, y=smiertelnosc))+
+  facet_wrap(~add_conditions, ncol = 1)+
+  scale_y_continuous(labels = percent_format(accuracy = 1))+
+  coord_flip()+
+  labs(fill="", y="śmiertelność", x="", 
+       title = "Porównanie śmiertelności w zależności od grupy wiekowej",
+       caption = "Źródło: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5))
+
+my_gg <- wykres + 
+  geom_col_interactive(aes(x=person_age_group, y=smiertelnosc, tooltip = etykieta), fill="blue")
+
+girafe(code = print(my_gg),width_svg = 8, height_svg = 5 )
+```
+
+
+
+## Sytuacja w regionach
+
+```{r}
+d <- obwody.wide %>%
+  filter(data==max(data))%>%
+  arrange(desc(suma.chorych))%>%
+  select(2,3)
+```
+
+
+Najwięcej potwierdzonych przypadków zarażenia wirusem SARS-CoV-2 jest `r if_else(d[1,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[1,1], "m"))` **(`r format(pull(d[1,2]), big.mark=",")`)** oraz `r if_else(d[2,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[2,1], "m"))` **(`r format(pull( d[2,2]), big.mark=",")`)** i `r if_else(d[3,1]=="Kijów", paste("w Kijowie"), paste0("obwodzie ", d[3,1], "m"))` **(`r format(pull( d[3,2]), big.mark=",")`)**. 
+
+```{r, fig.width=8, fig.height=5}
+a <- obwody.wide %>%
+  filter(data==max(data))%>%
+    mutate(across(c(lat, long), as.numeric),
+           aktywni.100 = round(suma.aktywnych*1e5/population,1))
+
+ggplot() + 
+  geom_map(data=a, aes(map_id=Kod, fill=suma.chorych), map=shp1f) + 
+  geom_path(data = shp1f, aes(x=long, y=lat, group=group), colour="grey", size=0.5) + 
+  coord_map(projection = "mercator") + 
+  scale_fill_gradient(low = "white", high = "orange") +
+  labs(fill= "liczba \nzarażeń", title = "Liczba potwierdzonych przypadków SARS-CoV-2 ",
+       #subtitle =  paste0( "stan na ", format(as.Date(a$data2), "%d/%m/%Y"), ", godz. 9.00"),
+       caption = "Źródło - Ministerstwo Zdrowia Ukrainy") +
+  geom_label(data=a, aes(x=long, y=lat), label=a$suma.chorych, size=3) +
+  theme_bw()+
+  theme(axis.ticks = element_blank(), panel.border = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(),
+        axis.title.x = element_blank(), axis.title.y = element_blank(), legend.position = c(0.1, 0.2),
+        panel.grid.minor = element_blank(),panel.grid.major = element_blank(), plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5), plot.background = element_rect(colour = "grey", size = 0.5), 
+        plot.caption = element_text(size = 8))
+```
+
+```{r}
+d <- a %>%
+  arrange(desc(aktywni.100))%>%
+  select(2,17)
+```
+
+Najwięcej aktywnych przypadków zakażnia w przeliczeniu na 100 tys. mieszkańców jest `r if_else(d[1,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[1,1], "m"))` **(`r format(pull(d[1,2]), big.mark=",")`)** oraz `r if_else(d[2,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[2,1], "m"))` **(`r format(pull( d[2,2]), big.mark=",")`)** i `r if_else(d[3,1]=="Kijów", paste("w Kijowie"), paste0("obwodzie ", d[3,1], "m"))` **(`r format(pull( d[3,2]), big.mark=",")`)**. Najbardziej dotknięta epidemią jest Zachodnia Ukraina, natomiast centralna (z wyjątkiem Kijowa) oraz południowa i wschodnia część kraju odczuwa jej skutki w dużo mniejszym stopniu.
+
+
+```{r, fig.width=8, fig.height=5}
+ggplot() + 
+  geom_map(data=a, aes(map_id=Kod, fill=aktywni.100), map=shp1f) + 
+  geom_path(data = shp1f, aes(x=long, y=lat, group=group), colour="grey", size=0.5) + 
+  coord_map(projection = "mercator") + 
+  scale_fill_gradient(low = "white", high = "orange") +
+  labs(fill= "liczba \nzarażeń", title = "Liczba aktywnych przypadków SARS-CoV-2 na 100 tys. mieszkańców",
+       #subtitle =  paste0( "stan na ", format(as.Date(a$data2), "%d/%m/%Y"), ", godz. 9.00"),
+       caption = "Źródło - Ministerstwo Zdrowia Ukrainy") +
+  geom_label(data=a, aes(x=long, y=lat), label=a$aktywni.100, size=3) +
+  theme_bw()+
+  theme(axis.ticks = element_blank(), panel.border = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(),
+        axis.title.x = element_blank(), axis.title.y = element_blank(), legend.position = c(0.1, 0.2),
+        panel.grid.minor = element_blank(),panel.grid.major = element_blank(), plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5), plot.background = element_rect(colour = "grey", size = 0.5), 
+        plot.caption = element_text(size = 8))
+```
+
+```{r}
+# total active
+load(file = "E:/R/Covid.Ukraina/dane/miejscowosci.Rda")
+
+a <- miejscowosci%>%
+  filter(total_confirm>0)%>%
+  mutate(aktywni = total_confirm-(total_recover+total_death))%>%
+  filter(aktywni>0)
+
+miasta <- c("Winnica", "Kijów", "Użhorod", "Łuck", "Czerniowce", "Charków", "Odessa", "Lwów", "Dnipro")
+
+load(file = "E:/R/Covid.Ukraina/dane/obwody.lista.Rda")
+b <- obwody %>%
+  filter(stolica %in% miasta,
+         Kod!="UA32")%>%
+  mutate(long_s = gsub(",", ".", long_s),
+         long_s = as.numeric(long_s),
+         lat_s = gsub(",", ".", lat_s),
+         lat_s = as.numeric(lat_s))
+
+
+```
+
+Należy przy tym pamiętać, że ogniska epidemii są bardzo rozproszone. Obecnie na Ukrainie w **`r nrow(a)`** miejscowościach przebywa (co najmniej jedna) osoba zakażona koronawirusem. Przy czym od początku czerwca, kiedy rozpoczął się wzrost zakażeń, liczba ta systematycznie się zwiększa. 
+
+```{r, fig.width=8, fig.height=5, include=FALSE}
+ggplot(a) + 
+  #geom_map(data=a, aes(map_id=Kod), map=shp1f) + 
+  geom_path(data = shp1f, aes(x=long, y=lat, group=group), colour="grey", size=0.001) + 
+  coord_map(projection = "mercator") + 
+  geom_point(aes(x=registration_settlement_lng, y=registration_settlement_lat, size=aktywni), alpha=0.4, color="orange")+
+  labs(size="zakażenia",
+       title = "Liczba aktywnych przypadków SARS-CoV-2 w miejscowościach",
+       caption = "źródło: Ministerstwo Zdrowia Ukrainy")+
+  scale_size(range = c(0.2,12), breaks = c(1,10,100,500,1000,1500))+
+  geom_point(data=b, aes(x=long_s, y=lat_s), size=1, color="blue")+
+  geom_text(data=b, aes(x=long_s, y=lat_s, label=stolica), color="grey20", vjust=-0.3, size=3)+
+  theme_bw()+
+  theme(axis.ticks = element_blank(), panel.border = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank(),
+        axis.title.x = element_blank(), axis.title.y = element_blank(), legend.position = c(0.1, 0.2),
+        panel.grid.minor = element_blank(),panel.grid.major = element_blank(), plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5), plot.background = element_rect(colour = "grey", size = 0.5), 
+        plot.caption = element_text(size = 8))
+```
+
+
+![](E:/R/Covid.Ukraina/wykresy/animacja.gif)
+
+
+### Dynamika zakażeń w obwodach
+
+```{r}
+# średnia krocząca
+a <- obwody.wide %>%
+  mutate(zach.100 = nowe.suma.chorych*100000/population)%>%
+  group_by(obwod)%>%
+  mutate(srednia= zoo::rollmean(zach.100, k=7, fill=NA, align="right"))%>%
+  filter(srednia !=is.na(srednia))
+
+b <- a %>%
+  group_by(obwod)%>%
+  filter(srednia ==max(srednia))%>%
+  distinct(srednia)%>%
+  arrange(desc(srednia))
+
+a$obwod <- ordered(a$obwod, levels = b$obwod)
+```
+
+W obwodach na Zachodniej Ukrainie utrzymuje się niezmiennie wysoki poziom dziennych nowych zakażeń. W miejscach, gdzie chwilowo udało się zmniejszyć zakażenia, jak np. w obwodzie czerniowieckim, można zaobserwować drugą falę zakażeń.  
+
+```{r fig.width=7, fig.height=7}
+ggplot(filter(a), aes(x=data, y=srednia))+
+  geom_path(aes(color=obwod),size=1.5, alpha=0.8) +
+  facet_wrap(~obwod, ncol=5)+
+  scale_x_date(date_breaks = "months" , date_labels = "%b")+
+  #coord_cartesian(xlim=c(0,sum(a$Państwo=="Białoruś")-1))+
+  labs(x="", 
+       y="dzienny przyrost",
+       color="",
+       title = "Liczba dziennych zakażeń* na 100 tys. mieszkańców w obwodach",
+       #subtitle = "średnia krocząca z 7 dni (oś y wspólna dla wszystkich obwodów)",
+       caption = "Źródło: Ministerstwo Zdrowia Ukrainy\n*średnia ruchoma z 7 dni")+
+  theme_bw()+
+  theme(legend.position = "none", plot.caption = element_text( size = 8), plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5),
+        plot.background = element_rect(colour = "grey", size = 0.5))
+
+```
+
+
+## Sytuacja w szpitalach
+
+```{r}
+load("E:/R/Covid.Ukraina/dane/szpitale.obwody.Rda")
+
+samoizolacja <- szpitale.obwody %>%
+  group_by(izolacja)%>%
+  filter(zvit_date==max(zvit_date))%>%
+  summarise(
+    liczba = sum(active_confirm)
+  )
+
+```
+
+Zdecydowana więszkość **(`r paste0(round(samoizolacja[1,2]/sum(samoizolacja$liczba)*100,1), "%")`)** aktywnych zakażonych przebywa na samoizolacji. W szpitalach znajduje się **`r format(pull(samoizolacja[2,2]), big.mark=",")`** osób. Wraz z obserwowanym od maja wzrostem zakażeń, zwiększa się też liczba chorych na Covid-19, ale jednocześnie zmniejsza się odsetek hospitalizacji osób zakażonych. Oznacza to, że na Ukrainie coraz więcej wyłapuje się przypadków bezobjawowych. 
+
+```{r}
+a <- szpitale.obwody %>%
+  group_by(zvit_date,izolacja)%>%
+  summarise(
+    #liczba = sum(new_confirm)-sum(new_recover)-sum(new_death)
+    liczba = sum(active_confirm)
+  )%>%
+  filter(zvit_date>"2020-03-31")%>%
+  pivot_wider(names_from = izolacja, values_from = liczba)%>%
+  mutate(zakazeni = izolacja+szpital)%>%
+  mutate(proc.hosp = szpital/zakazeni)%>%
+  mutate(etykieta1 = paste0("odsetek - ", round(proc.hosp*100,1), "%\ndata - ", zvit_date),
+         etykieta2 = paste0("pacjenci - ", szpital, "\ndata - ", zvit_date))
+
+
+```
+
+```{r}
+ggplot(a, aes(x=zvit_date, y=proc.hosp))+
+  #geom_path(color="blue", size=1.5)+
+  scale_y_continuous(labels = percent_format(accuracy = 1))+
+  labs(x="", y="", 
+       title = "Odsetek hospitalizowanych przypadków",
+       caption = "")+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5)) ->p1
+
+ggplot(a, aes(x=zvit_date, y=szpital))+
+  #geom_path(color="blue", size=1.5)+
+  scale_y_continuous()+
+  labs(x="", y="", 
+       title = "Liczba pacjentów w szpitalach z Covid-19",
+       caption = "Źródło: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5)) ->p2
+```
+
+```{r}
+my_gg1 <- p1 + 
+  geom_col_interactive(aes(tooltip = etykieta1), size = 3, color="blue")
+  
+
+my_gg2 <- p2 + 
+  geom_col_interactive(aes(tooltip = etykieta2), size = 3, color="blue")
+
+girafe( ggobj = plot_grid(my_gg2, my_gg1), width_svg = 8, height_svg = 4)
+```
+
+
+### Liczba łóżek
+
+```{r}
+load("E:/R/Covid.Ukraina/dane/szpitale.Rda")
+
+a <- szpitale %>%
+  filter(data==max(data, na.rm=T))
+```
+
+Na Ukrainie pacjencji chorzy na covid są leczeni w **`r nrow(a)`** szpitalach, w których znajduje się **`r format(sum(a$lozka), big.mark=",")`** odpowiednio przystosowanych łóżek, które są zajęte średnio na **`r paste0(round((sum(a$lozka.zajete)/sum(a$lozka))*100,1), "%")`**. Odsetek ten różni się znacząco w zależności od regionu. W obwodach na Zachodniej Ukrainie, z najwyższym wskaźnikiem zakażeń wynosi on 30-50%, podczas gdy na południu kraju zaledwie kilka procent. 
+
+```{r}
+a <- szpitale %>%
+  filter(data==max(data, na.rm=T))%>%
+  group_by(Obwód)%>%
+  summarise(
+    lozka = sum(lozka),
+    lozka.zajete = sum(lozka.zajete)
+  ) %>%
+  mutate(proc.zajetych = lozka.zajete/lozka,
+         etykieta = paste0(round(proc.zajetych*100, 1), "%"))
+```
+
+```{r}
+ggplot(a, aes(x=reorder(Obwód, proc.zajetych), y=proc.zajetych))+
+  #geom_col(fill="blue")+
+  coord_flip()+
+  scale_y_continuous(labels = percent_format(accuracy = 1))+
+  labs(x="", y="",
+       title = "Wykorzystanie łóżek przystosowanych dla pacjentów z Covid-19",
+       caption = "Źródło: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw() -> p1
+```
+
+```{r}
+my_gg <- p1 + 
+  geom_col_interactive(aes(tooltip = etykieta), fill="blue")
+
+girafe(code = print(my_gg),width_svg = 8, height_svg = 4 )
+```
+
+Zaznaczyć należy przy tym, że w przypadku pojedynczych szpitali ich zapełnienie przekracza 80%, a nawet sięga 100%, przy czym nie dotyczy to wyłącznie Zachodniej Ukrainy. 
+
+```{r}
+load("E:/R/Covid.Ukraina/dane/szpitale.Rda")
+load("E:/R/Covid.Ukraina/dane/szpitale.geo.Rda")
+
+a <- szpitale %>%
+  filter(data==max(data, na.rm=T))%>%
+  select(3,19:29)%>%
+  left_join(szpitale.geo, by=c("kod"="kod.EDRPOU"))
+
+```
+
+```{r}
+mapa <- a %>%
+  #wyrzuca błąd, jeśli się pojawia nowy szpital
+  #filter(!is.na(lon))%>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)%>%
+  filter(lozka>0)%>%
+  mutate(proc.etykieta = paste0(round(proc.zajetych*100,1), "%"))
+
+
+```
+
+
+```{r, out.width = '100%'}
+
+tmap_mode("view")
+tm_basemap(leaflet::providers$CartoDB.Positron)+
+tm_shape(mapa)+
+  tm_dots("proc.zajetych", size = "lozka", id="szpital",alpha=0.5,scale=1.5,
+          clustering = F,
+          n=10,legend.format=list(fun=function(x) paste0(formatC(x*100, digits=0, format="f"), "%")), palette = "viridis",
+          popup.vars = c("Obwód", "przystosowane łóżka"="lozka", "zajęte łóżka"="lozka.zajete", "odsetek zajętych łóżek"="proc.etykieta"),
+          title="Stopień zapełnienia <br>łóżek")+
+  tm_legend(legend.format = list(text.separator= "-"))+
+  tm_view(symbol.size.fixed=T, dot.size.fixed=T)
+
+```
+
+
+
+### Liczba i wykorzystanie respiratorów
+
+```{r}
+load("E:/R/Covid.Ukraina/dane/szpitale.Rda")
+b <- szpitale %>%
+  filter(!is.na(szpital))%>%
+  group_by(data)%>%
+  summarise(across(where(is.numeric), sum))%>%
+  mutate(etykieta1=paste0("respirator - ",respirator.sredni,"\ndata - ", data ),
+         etykieta2=paste0("respirator zajęty - ",respirator.sredni.covid,"\ndata - ", data ),
+         etykieta3=paste0("respirator - ",respirator.wysoki,"\ndata - ", data ),
+         etykieta4=paste0("respirator zajęty - ",respirator.wysoki.covid,"\ndata - ", data ))
+
+respiratory.suma <- b %>%
+  filter(data==max(data))%>%
+  summarise(
+    respiratory.suma.covid = sum(respirator.wysoki.covid)+sum(respirator.sredni.covid),
+    respiratory.suma = sum(respirator.wysoki)+sum(respirator.sredni),
+    wykorzystanie = respiratory.suma.covid/respiratory.suma
+  )
+
+```
+
+Spośród **`r format(pull(samoizolacja[2,2]), big.mark=",")`** pacjentów przebywających w szpitalach, **`r format(pull(respiratory.suma[1,1]), big.mark=",")`** osób jest w stanie ciężkim i podłączona do respiratora. W szpitalach jest w sumie **`r format(pull(respiratory.suma[1,2]), big.mark=",")`** sprawnych respiratorów wysokiej i średniej klasy. Pacjenci chorzy na Covid wykorzystują je w **`r paste0(round(respiratory.suma[1,3]*100,1), "%")`**. 
+
+```{r}
+
+my_gg1 <- ggplot(b)+
+  labs(x="", y="respirator średniej klasy",
+       caption = "Źródło: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  geom_col_interactive(aes(x=data, y=respirator.sredni,tooltip = etykieta1), size = 2, fill="blue")+
+  geom_col_interactive(aes(x=data, y=respirator.sredni.covid,tooltip = etykieta2), size = 2, fill="red")
+
+my_gg2 <- ggplot(b)+
+  labs(x="", y="respirator wysokiej klasy",
+       caption = "")+
+  theme_bw()+
+  geom_col_interactive(aes(x=data, y=respirator.wysoki,tooltip = etykieta3), size = 2, fill="blue")+
+  geom_col_interactive(aes(x=data, y=respirator.wysoki.covid,tooltip = etykieta4), size = 2, fill="red")
+
+girafe( ggobj = plot_grid(my_gg2, my_gg1), width_svg = 8, height_svg = 4)
+#girafe(code = print(my_gg) )
+```
+
+
+## Liczba testów
+
+
+```{r}
+
+data.minimalna <- min(testy.calosc$data)
+data.maksymalna <- max(testy.calosc$data)
+
+testy <- testy.calosc %>%
+  select(data, Kod, PLR.ogolem)%>%
+  unite("id", data, Kod)%>%
+  #usuwanie błędu z Czernihowa
+  mutate(PLR.ogolem = if_else(id=="2020-07-17_UA74", 16246, PLR.ogolem))
+  
+obwody <- obwody.wide %>%
+  select(-c(4:10))%>%
+  unite("id", data, Kod, remove = F) %>%
+  filter(data<=data.maksymalna&data>=data.minimalna)%>%
+  right_join(testy, by="id")%>%
+  mutate(across(c(suma.chorych, PLR.ogolem), ~.*1e5/population, .names="{col}.100"),
+         etykieta = paste0("obwód ", obwod, "\nzakazenia na 100 tys. - ", round(suma.chorych.100), "\ntesty na 100 tys. - ", round(PLR.ogolem.100)))
+
+ilosc.testow <- obwody %>%
+  filter(data==max(data))
+
+```
+
+Według stanu na `r format(unique(ilosc.testow$data),"%d-%m-%Y")` Ukraina przeprowadziła **`r format(sum(ilosc.testow$PLR.ogolem), big.mark=",")`** testów metodą RT-PCR. Można zaobserwować bardzo duże dysproporcie w zależności od regionów w ilości przeprowadzonych testów w stosunku do liczby mieszkańców. W niektórych obwodach, mimo robionych testów liczba zakażonych nie rośnie (czerkaski, chersoński, kirowohradzki),w części rośnie szybko (cała Zachodnia Ukraina), są też obwody gdzie testów testów się robi bardzo mało (np. ługański).
+
+
+```{r}
+
+ggplot(obwody, aes(x=suma.chorych.100, y=PLR.ogolem.100, group=obwod))+
+  geom_line(aes(color=suma.chorych), size=1.5, show.legend = F)+
+  #geom_path(aes(color=zakazenia, size=PLR.ogolem))+
+  #geom_smooth(method = "lm", se=F)+
+  #geom_label_repel(data=filter(obwody, data==data.maksymalna),aes(label=obwod),  hjust=-0.2, fill="gray89")+
+  #scale_size(range = c(1,12), breaks = c(5000, 20000,50000,75000,100000))+
+  scale_color_gradient2(low = "blue", high = "yellow", mid = "red", midpoint = 4000)+
+  #scale_color_viridis()+
+  scale_size(labels = comma, breaks = c(2e4,5e4,1e5)) +
+  #coord_trans(x="log2", y="log2")+
+  labs(x= "liczba zakażeń na 100 tys. mieszkańców",
+       y = "liczba testów na 100 tys. mieszkańców",
+       size = "całkowita ilość \ntestów",
+       color = "całkowita ilość \nzakażonych",
+       caption = "Dane: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  theme(legend.position = c(0.9,0.3))-> p1
+
+
+my_gg <- p1 + 
+  geom_point_interactive(aes(size=PLR.ogolem, color=suma.chorych, tooltip = etykieta))+
+  geom_label_repel(data=filter(obwody, data==data.maksymalna),aes(label=obwod),  hjust=-0.2, fill="gray89")
+
+girafe(code = print(my_gg),width_svg = 8, height_svg = 6 )
+```
+
