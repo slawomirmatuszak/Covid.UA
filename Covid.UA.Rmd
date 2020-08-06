@@ -325,7 +325,7 @@ ggplot(a) +
 ```
 
 
-![](E:/R/Covid.Ukraina/wykresy/animacja.gif)
+![](E:/R/Covid.Ukraina/wykresy/animacja2.gif)
 
 
 ### Dynamika zakażeń w obwodach
