@@ -91,44 +91,46 @@ a <- obwody.wide %>%
   filter(srednia !=is.na(srednia))%>%
   mutate(etykieta = paste0("zakażeni - ", round(srednia,0), "\ndata - ", data),
          etykieta2 = paste0("aktywni - ", aktywni.zach, "\ndata - ", data),
-         etykieta3 = paste0("ozdrowieńcy - ", wyzdrowienia, "\ndata - ", data))
-```
-
-```{r}
-wykres <- ggplot(a)+
-  geom_line(aes(x=data, y=srednia),size=1.5, alpha=0.8, color="orange") +
-  labs(x="", 
-       y="",
-       color="",
-       title = "Liczba dziennych zakażeń* na Ukrainie",
-       caption = "średnia ruchoma z 7 dni")+
-  theme_bw()+
-  theme(legend.position = "none", plot.caption = element_text( size = 8), plot.title = element_text(hjust = 1), plot.subtitle = element_text(hjust = 0.5),
-        plot.background = element_rect(colour = "grey", size = 0.5),
-        panel.border = element_blank())
-
-my_gg <- wykres + 
-  geom_point_interactive(aes(x=data, y=srednia,tooltip = etykieta),size = 2, color="orange")
-
-
-#girafe(code = print(my_gg),width_svg = 8, height_svg = 3 )
+         etykieta3 = paste0("ozdrowieńcy - ", wyzdrowienia, "\ndata - ", data),
+         etykieta4 = paste0("nowe zakażenia - ", nowe.zach, "\ndata - ", data))
 ```
 
 Liczba aktywnych zakażonych (czyli tych, którzy nie wyzdrowieli, bądź nie zmarli) wynosi  **`r format(sum(c$suma.aktywnych), big.mark=",")`**. Pod koniec sierpnia liczba ta przewyższyła ilość osób, które wyzdrowiały (**`r format(sum(c$suma.wyzdrowien), big.mark=",")`**), co świadczy o tym, że nie ma oznak wygasania epidemii. 
 
 ```{r}
 wykres <- ggplot(a)+
-  geom_line(aes(x=data, y=aktywni.zach), size=1.5, alpha=0.8, color="orange") +
-  geom_line(aes(x=data, y=wyzdrowienia), size=1.5, alpha=0.8, color="green") +
+  geom_line(aes(data, nowe.zach, color="dzienne zakażenia"), show.legend = T, alpha = 0.5)+
+  geom_line(aes(data, srednia, color = "średnia ruchoma z 7 dni"), size=1.5)+
+  scale_y_continuous()+
+  scale_color_manual(values = c("dzienne zakażenia"="red", "średnia ruchoma z 7 dni"= "orange"))+
+  labs(x=NULL,
+       y=NULL,
+       color = "",
+       caption = "")+
+  theme_bw() +
+  theme(legend.position = "top")
+
+#ggplotly(wykres)
+
+my_gg <- wykres + 
+  geom_point_interactive(aes(data, nowe.zach,tooltip = etykieta4), size = 2, color="red", alpha = 0.5)+
+  geom_point_interactive(aes(data, srednia, tooltip = etykieta), size = 2, color="orange")
+  
+```
+
+
+```{r}
+wykres <- ggplot(a)+
+  geom_line(aes(x=data, y=aktywni.zach, color="aktywni"), size=1.5, alpha=0.8) +
+  geom_line(aes(x=data, y=wyzdrowienia, color="ozdrowieńcy"), size=1.5, alpha=0.8) +
+  scale_color_manual(values = c("aktywni"="orange", "ozdrowieńcy"= "green"))+
   labs(x="", 
        y="",
        color="",
-       title = "Liczba aktywnych zakażonych i wyzdrowień",
+       #title = "Liczba aktywnych zakażonych i wyzdrowień",
        caption = "Dane: Ministerstwo Zdrowia Ukrainy")+
   theme_bw()+
-  theme(legend.position = "none", plot.caption = element_text( size = 8), plot.title = element_text(hjust = 1), plot.subtitle = element_text(hjust = 0.5),
-        plot.background = element_rect(colour = "grey", size = 0.5),
-        panel.border = element_blank())
+  theme(legend.position = "top")
 
 my_gg2 <- wykres + 
   geom_point_interactive(aes(x=data, y=aktywni.zach, tooltip = etykieta2),size = 2, color="orange")+
@@ -190,7 +192,7 @@ fig <- plot_ly(d, x = ~data, y = ~srednia, color = ~Państwo,
   add_lines()%>%
   highlight(on = "plotly_hover", off = "plotly_deselect", color = "red", opacityDim=0.7)%>% 
   config(locale = 'pl',displayModeBar = FALSE)%>% 
-  layout(yaxis = list(title="dzienny przyrost"), xaxis = list(title=""), title = "Liczba dziennych* zakażeń na 100 tys. mieszkańców w obwodach",
+  layout(yaxis = list(title="dzienny przyrost"), xaxis = list(title=""), title = "<b>Liczba dziennych* zakażeń na 100 tys. mieszkańców</b>",
          annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, ECDC",showarrow = F, xref='paper', yref='paper', 
       xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 
@@ -763,7 +765,7 @@ wykrywalnosc.etykieta <- wykrywalnosc %>%
 ```
 
 Według stanu na `r format(unique(ilosc.testow$data),"%d-%m-%Y")` Ukraina przeprowadziła **`r format(sum(ilosc.testow$PLR.cum), big.mark=",")`** testów metodą RT-PCR. Choć liczba ta waha się znacznie w zależności od dnia tygodnia, jednak od początku lipca można zaobserować systematyczny wzrost i wg stanu obecnego przeprowadza się średnio ponad dwa razy więcej testów niż dwa miesiące wcześniej. 
-Wykrywalność przypadków zakażenia w całym kraju wynosi **`r paste0(wykrywalnosc.etykieta*100, "%")`**. Jest to poziom około trzykrotnie większy niż w Polsce i świadczy o tym, że testów robi się zbyt mało.  
+Wykrywalność przypadków zakażenia w całym kraju wynosi **`r paste0(wykrywalnosc.etykieta*100, "%")`**. Jest to poziom około trzykrotnie większy niż w Polsce i świadczy o tym, że testów robi się zbyt mało. 
 
 ```{r}
 wykres <- ggplot(wykrywalnosc, aes(data, wykrywalnosc))+
@@ -808,7 +810,7 @@ girafe( ggobj = plot_grid(my_gg2, my_gg1), width_svg = 8, height_svg = 4)
 
 ### Testy w regionach
 
-Można zaobserwować bardzo duże dysproporcie w zależności od regionu w ilości przeprowadzonych testów w stosunku do liczby mieszkańców. W części obwodów na Zachodniej Ukrainie duża ilość testów doprowadziła do wykrycia dużej ilości zakażonych. W niektórych obwodach (m.in. kirowohradzki i czerkaski), stosunkowo duża ilość testów nie spowodowała do drastycznego zwiększenia ilości zakażonych. W większości obwodów poziom zakażeń pozostaje niski, co prawdopodobnie wiąże się z niewielką ilością robionych testów. 
+Można zaobserwować bardzo duże dysproporcie w zależności od regionu w ilości przeprowadzonych testów w stosunku do liczby mieszkańców. Jeśli wziąć pod uwagę dane o testach i nowych zakażeniach **od połowy lipca**, kiedy rozpoczęła się druga fala zakażeń, w części obwodów na Zachodniej Ukrainie duża ilość testów doprowadziła do wykrycia dużej ilości zakażonych. W niektórych obwodach (m.in. winnicki i czerkaski), stosunkowo duża ilość testów nie spowodowała do drastycznego zwiększenia ilości zakażonych. W większości obwodów poziom zakażeń pozostaje niski, co może się wiązać z niewielką ilością robionych testów. Na tle pozostałych obwódów wyróżnia się Kijów, gdzie zrobiono najwięcej testów w stosunku do liczby mieszkańców, co jednak nie doprowadziło dużego wzrostu zakażeń (w stosunku do liczby ludności).
 
 ```{r}
 testy2 <- ilosc.testow %>%
@@ -819,7 +821,7 @@ testy2 <- ilosc.testow %>%
                            ))
 ```
 
-```{r}
+```{r include=F}
 
 ggplot(testy2, aes(x=suma.chorych.100, y=PLR.cum.100))+
   #geom_line(aes(color=suma.chorych), size=1.5, show.legend = F)+
@@ -843,6 +845,67 @@ ggplot(testy2, aes(x=suma.chorych.100, y=PLR.cum.100))+
 
 my_gg <- p1 + 
   geom_point_interactive(aes(size=PLR.cum, color=suma.chorych, tooltip = etykieta))#+
+  #geom_label_repel(aes(label=obwod),  hjust=-0.2, fill="gray89")
+
+girafe(code = print(my_gg),width_svg = 8, height_svg = 6 )
+
+```
+
+```{r testy od lipca}
+
+testy.lipiec <- testy.calosc %>%
+  filter(data>="2020-07-15")%>%
+  ungroup()%>%
+  select(data, PLR.dzienne, Obwód, population)%>%
+  unite("id", c(data, Obwód))
+
+obwody.lipiec <- obwody.wide %>%
+  filter(data>="2020-07-15")%>%
+  ungroup()%>%
+  select(data, obwod, zakazenia = nowe.suma.chorych) %>%
+  unite("id", c(data, obwod), remove = F)%>%
+  left_join(testy.lipiec, by="id")%>%
+  group_by(obwod)%>%
+  summarise(
+    zakazenia = sum(zakazenia),
+    testy = sum(PLR.dzienne, na.rm=T),
+    population = mean(population, na.rm=T)
+  )%>%
+  mutate(across(c(zakazenia, testy), ~.*1e5/population, .names = "{col}.100"))%>%
+  mutate(tekst = case_when(testy.100>4500&zakazenia.100<400 ~"dużo testów, \nmało zakażonych",
+                           testy.100<5000&testy.100>2000&zakazenia.100<250 ~"średnia ilość testów, \nmało zakażonych",
+                           testy.100<3000&testy.100>1600&zakazenia.100>250 ~"średnia ilość testów, \nśrednia ilość zakażonych",
+                           testy.100<2100&zakazenia.100<350 ~"mało testów, \nmało zakażonych",
+                           TRUE ~ "dużo testów, \ndużo zakażonych"
+                           ),
+         etykieta = paste0("obwód ", obwod, "\nzakazenia na 100 tys. - ", round(zakazenia.100), "\ntesty na 100 tys. - ", round(testy.100)))
+
+```
+
+```{r}
+
+ggplot(obwody.lipiec, aes(x=zakazenia.100, y=testy.100))+
+  #geom_line(aes(color=suma.chorych), size=1.5, show.legend = F)+
+  geom_mark_hull(aes(fill = tekst, label = tekst), show.legend = F, label.buffer = unit(3, 'mm'), label.fontsize = 10)+
+  #geom_path(aes(color=zakazenia, size=PLR.cum))+
+  #geom_smooth(method = "lm", se=F)+
+  #geom_label_repel(data=filter(obwody, data==data.maksymalna),aes(label=obwod),  hjust=-0.2, fill="gray89")+
+  #scale_size(range = c(1,12), breaks = c(5000, 20000,50000,75000,100000))+
+  scale_color_gradient2(low = "blue", high = "yellow", mid = "red", midpoint = 4000)+
+  #scale_color_viridis()+
+  scale_size(labels = comma, breaks = c(2e4,5e4,1e5)) +
+  #coord_trans(x="log2", y="log2")+
+  labs(x= "liczba zakażeń na 100 tys. mieszkańców",
+       y = "liczba testów na 100 tys. mieszkańców",
+       size = "całkowita ilość \ntestów",
+       color = "całkowita ilość \nzakażonych",
+       caption = "Dane: Ministerstwo Zdrowia Ukrainy")+
+  theme_bw()+
+  theme(legend.position = c(0.9,0.3))-> p1
+
+
+my_gg <- p1 + 
+  geom_point_interactive(aes(size=testy, color=zakazenia, tooltip = etykieta))#+
   #geom_label_repel(aes(label=obwod),  hjust=-0.2, fill="gray89")
 
 girafe(code = print(my_gg),width_svg = 8, height_svg = 6 )
