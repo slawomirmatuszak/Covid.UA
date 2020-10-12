@@ -76,7 +76,7 @@ c <- obwody.wide %>%
 
 ## Sytuacja ogólna
 
-Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia i **cztery tysiące** na początku października 2000 r. 
+Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia i **pięć tysiący** w połowie października 2000 r. 
 
 
 ```{r średnia krocząca dla UA}
@@ -372,6 +372,26 @@ my_gg <- wykres +
 
 girafe(code = print(my_gg),width_svg = 8, height_svg = 5 )
 ```
+```{r}
+load("E:/R/Covid.Ukraina/dane/miasta.tydzien.Rda")
+```
+
+
+Należy przy tym pamiętać, że ogniska epidemii są bardzo rozproszone. W ciągu ostatniego tygodnia na Ukrainie w **`r nrow(miasta.tydzien)`** miejscowościach zanotowonano co najmniej jeden przypadek zakażenia koronawirusem. Przy czym  liczba ta systematycznie się zwiększa. 
+
+```{r, out.width = '100%'}
+tmap_mode("view")
+tm_basemap(leaflet::providers$CartoDB.Positron)+
+  tm_shape(miasta.tydzien)+
+  tm_dots("nowe", size = "nowe", id="registration_settlement",alpha=0.5,scale=2,
+          clustering = F,
+          col = "red",
+          #n=10,legend.format=list(fun=function(x) paste0(formatC(x, digits=0, format="f"))), palette = "viridis",
+          popup.vars = c("liczba zakażeń"="nowe"),
+          title="Stopień zapełnienia <br>łóżek")+
+  tm_legend(legend.format = list(text.separator= "-"))+
+  tm_view(symbol.size.fixed=T, dot.size.fixed=T)
+```
 
 
 ```{r}
@@ -430,7 +450,6 @@ b <- obwody %>%
 
 ```
 
-Należy przy tym pamiętać, że ogniska epidemii są bardzo rozproszone. Obecnie na Ukrainie w **`r nrow(a)`** miejscowościach przebywa (co najmniej jedna) osoba zakażona koronawirusem. Przy czym od początku czerwca, kiedy rozpoczął się wzrost zakażeń, liczba ta systematycznie się zwiększa. 
 
 ```{r, fig.width=8, fig.height=5, include=FALSE}
 ggplot(a) + 
@@ -450,11 +469,9 @@ ggplot(a) +
         panel.grid.minor = element_blank(),panel.grid.major = element_blank(), plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5), plot.background = element_rect(colour = "grey", size = 0.5), 
         plot.caption = element_text(size = 8))
+
+# ![](E:/R/Covid.Ukraina/wykresy/animacja2.gif){width=70%}
 ```
-
-
-![](E:/R/Covid.Ukraina/wykresy/animacja2.gif){width=70%}
-
 
 ### Dynamika zakażeń w obwodach
 
@@ -1024,10 +1041,10 @@ pacjenci <-  szpitale.obwody%>%
     pacjenci = sum(active_confirm)
   )
 respiratory <- szpitale %>%
-  select(data, respirator.sredni.covid, respirator.wysoki.covid)%>%
+  select(data, respirator.sredni.covid, respirator.wysoki.covid,respirator.dzieciecy.covid)%>%
   group_by(data)%>%
   summarise(
-    respirator = sum(respirator.sredni.covid, na.rm = T)+sum(respirator.wysoki.covid, na.rm = T)
+    respirator = sum(respirator.sredni.covid, na.rm = T)+sum(respirator.wysoki.covid, na.rm = T)+sum(respirator.dzieciecy.covid, na.rm=T)
   )%>%
   filter(!is.na(data))%>%
   left_join(pacjenci, by= "data")%>%
