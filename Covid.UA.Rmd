@@ -230,7 +230,7 @@ plot_ly(a)%>%
 ```
 
 
-```{r sąsiedzi na 100 tys.}
+```{r sąsiedzi na 100 tys., include=F}
 # dane o zachorowaniu na 100 tys. mieszkańców
 UA <- obwody.wide %>%
   select(data, obwod, nowe.suma.chorych)%>%
@@ -255,13 +255,38 @@ ECDC <- covid.ECDC %>%
          zach.100 = cases*1e5/population,
          srednia = zoo::rollmean(zach.100, k=7, fill=NA, align="right"))%>%
   filter(data>"2020-03-31")%>%
-  select(data, Państwo, srednia)%>%
-  bind_rows(UA)
+  select(data, Państwo, srednia) #%>%
+  #bind_rows(UA)
   
+b <- ECDC %>%
+  group_by(Państwo)%>%
+  filter(data ==max(data))%>%
+  arrange(srednia)
+
+ECDC$Państwo <- ordered(ECDC$Państwo, levels = b$Państwo)
+
+# wyliczamy miejsce Ukrainy pod względem przyrostu zakażeń
+
+c <- ECDC %>%
+  bind_rows(UA)%>%
+  group_by(Państwo)%>%
+  filter(data ==max(data))%>%
+  arrange(desc(srednia))
+
+which(grepl("Ukraina", c$Państwo))
+
+nazwy.panstwa <- c %>%
+  ungroup()%>%
+  slice(1:(which(grepl("Ukraina", c$Państwo))-1))%>%
+  select(Państwo)%>%
+  pull()
+
+nazwy.panstwa <- paste(nazwy.panstwa, collapse = ", ")
+nazwy.panstwa <- sub(",([^,]*)$"," i\\1", nazwy.panstwa)
 
 ```
 
-Wśród państw sąsiadujących jedynie w Mołdawii jest znacząco większy przyrost nowych zakażeń w stosunku do liczby ludności, a na Węgrzech, Słowacji i w Rumunii zakażenia są na podobnym poziomie, jak na Ukrainie. 
+Ukraina zajmuje **`r paste(which(grepl("Ukraina", c$Państwo)), "miejsce")`**  pod względem przyrostu nowych zakażeń w stosunku do liczby ludności. **`r nazwy.panstwa `** mają proporcjonalnie więcej nowych zakażonych w porównaniu do Ukrainy. 
 
 ```{r fig.width=7, fig.height=4,include=T}
 library(plotly)
@@ -269,21 +294,32 @@ library(crosstalk)
 
 d <- highlight_key(ECDC, ~Państwo)
 
-fig <- plot_ly(d, x = ~data, y = ~srednia, color = ~Państwo,
-        #width = 500, height = 500, 
-        hoverinfo = 'text',
-        text = ~paste('</br> data: ', data,
-                      '</br> dzienne zakażenia: ', paste0(round(srednia,1)),
-                      '</br> Państwo: ', Państwo))%>%
-  add_lines()%>%
-  highlight(on = "plotly_click", off = "plotly_deselect", color = "red", opacityDim=0.7)%>% 
+plot_ly()%>%
+  add_trace(data=d, x = ~data, y = ~srednia, color = ~Państwo,
+            type = "scatter",
+            mode = "line",
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> dzienne zakażenia: ', paste0(round(srednia,1)),
+                          '</br> Państwo: ', Państwo))%>%
+  add_trace(data=UA, x = ~data, y = ~srednia,
+            color=I("red"),
+            #showlegend = FALSE,
+            name = "Ukraina",
+            type = "scatter",
+            mode = "line",
+            line = list(width = 4),
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> dzienne zakażenia: ', paste0(round(srednia,1)),
+                          '</br> Państwo: ', Państwo))%>%
+  highlight(on = "plotly_click", off = "plotly_deselect", color = "blue", opacityDim=0.5)%>% 
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)%>% 
   layout(yaxis = list(title="dzienny przyrost"), xaxis = list(title=""), title = "<b>Liczba dziennych* zakażeń na 100 tys. mieszkańców</b>",
-         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, ECDC",showarrow = F, xref='paper', yref='paper', 
-      xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
-
-fig
+         #showlegend = FALSE,
+         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, ECDC",showarrow = F, xref='paper', yref='paper',
+                            xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 ```
 
 
@@ -1462,7 +1498,11 @@ W porównaniu do krajów sąsiadujących, Ukraina robi stosunkowo mało testów.
 ```{r fig.width=7, fig.height=4}
 load("E:/R/Covid.Ukraina/dane/test.swiat.Rda")
 
+UA <- test.swiat %>%
+  filter(Państwo == "Ukraina")
+
 b <- test.swiat %>%
+  filter(Państwo != "Ukraina")%>%
   group_by(Państwo)%>%
   filter(data ==max(data))%>%
   arrange(test.per.th)
@@ -1471,42 +1511,66 @@ test.swiat$Państwo <- ordered(test.swiat$Państwo, levels = b$Państwo)
 
 d<- highlight_key(test.swiat, ~Państwo)
 
-plot_ly(d, x = ~data, y = ~test.per.th, color = ~Państwo,
-        #width = 500, height = 500, 
-        hoverinfo = 'text',
-        text = ~paste('</br> data: ', data,
-                      '</br> testy na tys. mieszkańców: ', paste0(round(test.per.th,2)),
-                      '</br> Państwo: ', Państwo))%>%
-  add_lines()%>%
-  highlight(on = "plotly_click", off = "plotly_deselect", color = "red", opacityDim=0.7)%>% 
+plot_ly()%>%
+  add_trace(data=d, x = ~data, y = ~test.per.th, color = ~Państwo,
+            type = "scatter",
+            mode = "line",
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> testy na tys. mieszkańców: ', paste0(round(test.per.th,2)),
+                          '</br> Państwo: ', Państwo))%>%
+  add_trace(data=UA, x = ~data, y = ~test.per.th,
+            color=I("red"),
+            #showlegend = FALSE,
+            name = "Ukraina",
+            type = "scatter",
+            mode = "line",
+            line = list(width = 4),
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> testy na tys. mieszkańców: ', paste0(round(test.per.th,2)),
+                          '</br> Państwo: ', Państwo))%>%
+  highlight(on = "plotly_click", off = "plotly_deselect", color = "blue", opacityDim=0.5)%>% 
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)%>% 
-  layout(yaxis = list(title="dzienne testy"), 
-         xaxis = list(title="",type = 'date', tickformat = "%d/%m"), 
+  layout(yaxis = list(title="dzienne testy"), xaxis = list(title="",type = 'date', tickformat = "%d/%m"), 
          title = "<b>Liczba dziennych* testów na tys. mieszkańców</b>",
-         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data",showarrow = F, xref='paper', yref='paper', 
-      xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
+         #showlegend = FALSE,
+         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data",showarrow = F, xref='paper', yref='paper',
+                            xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 ```
 
 Mimo ograniczonej liczby przeprowadzanych testów, wykrywalność jest bardzo wysoka. Odsetek pozytywnych testów jest większy niż w jakimkolwiek państwie sąsiadującym z Ukrainą. 
 
+
 ```{r fig.width=7, fig.height=4}
-plot_ly(d, x = ~data, y = ~wykrywalnosc, color = ~Państwo,
-        #width = 500, height = 500, 
-        hoverinfo = 'text',
-        text = ~paste('</br> data: ', data,
-                      '</br> wykrywalność: ', paste0(round(wykrywalnosc*100,1), "%"),
-                      '</br> Państwo: ', Państwo))%>%
-  add_lines()%>%
-  highlight(on = "plotly_click", off = "plotly_deselect", color = "red", opacityDim=0.7)%>% 
+plot_ly()%>%
+  add_trace(data=d, x = ~data, y = ~wykrywalnosc, color = ~Państwo,
+            type = "scatter",
+            mode = "line",
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> wykrywalność: ', paste0(round(wykrywalnosc*100,1), "%"),
+                          '</br> Państwo: ', Państwo))%>%
+  add_trace(data=UA, x = ~data, y = ~wykrywalnosc,
+            color=I("red"),
+            #showlegend = FALSE,
+            name = "Ukraina",
+            type = "scatter",
+            mode = "line",
+            line = list(width = 4),
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> wykrywalność: ', paste0(round(wykrywalnosc*100,1), "%"),
+                          '</br> Państwo: ', Państwo))%>%
+  highlight(on = "plotly_click", off = "plotly_deselect", color = "blue", opacityDim=0.5)%>% 
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)%>% 
   layout(yaxis = list(tickformat = "%",title=""), 
          xaxis = list(title="",type = 'date', tickformat = "%d/%m"), 
          title = "<b>Odsetek* pozytywnych testów</b>",
-         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data",showarrow = F, xref='paper', yref='paper', 
-      xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
-
-#yaxis = list(tickformat = "%", title="wykrywalność")
+         #showlegend = FALSE,
+         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data",showarrow = F, xref='paper', yref='paper',
+                            xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 ```
 
