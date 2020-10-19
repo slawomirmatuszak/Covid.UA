@@ -76,8 +76,7 @@ c <- obwody.wide %>%
 
 ## Sytuacja ogólna
 
-Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia i **pięć tysiący** w połowie października 2000 r. 
-
+Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2+1, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia i **pięć tysiący** w połowie października 2000 r. 
 
 ```{r średnia krocząca dla UA}
 #średnia krocząca dla UA
@@ -286,7 +285,7 @@ nazwy.panstwa <- sub(",([^,]*)$"," i\\1", nazwy.panstwa)
 
 ```
 
-Ukraina zajmuje **`r paste(which(grepl("Ukraina", c$Państwo)), "miejsce")`**  pod względem przyrostu nowych zakażeń w stosunku do liczby ludności. **`r nazwy.panstwa `** mają proporcjonalnie więcej nowych zakażonych w porównaniu do Ukrainy. 
+Ukraina na tle sąsiadów zajmuje **`r paste(which(grepl("Ukraina", c$Państwo)), "miejsce")`**  pod względem przyrostu nowych zakażeń w stosunku do liczby ludności. **`r nazwy.panstwa `** mają proporcjonalnie więcej nowych zakażonych w porównaniu do Ukrainy. 
 
 ```{r fig.width=7, fig.height=4,include=T}
 library(plotly)
@@ -410,6 +409,13 @@ girafe(code = print(my_gg),width_svg = 8, height_svg = 5 )
 ```
 ```{r}
 load("E:/R/Covid.Ukraina/dane/miasta.tydzien.Rda")
+kijow <- tydzien %>%
+  filter(Kod=="UA80")%>%
+  select(registration_area=obwod, registration_region=obwod, registration_settlement=obwod, nowe=roznica)%>%
+  mutate(lon = 30.534058,
+         lat = 50.449196)%>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+miasta.tydzien <- bind_rows(miasta.tydzien, kijow)
 ```
 
 
@@ -948,7 +954,7 @@ a <- szpitale %>%
 ```{r}
 mapa <- a %>%
   #wyrzuca błąd, jeśli się pojawia nowy szpital
-  #filter(!is.na(lon))%>%
+  filter(!is.na(lon))%>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)%>%
   filter(lozka>0)%>%
   mutate(proc.etykieta = paste0(round(proc.zajetych*100,1), "%"))
@@ -962,8 +968,8 @@ mapa <- a %>%
 tmap_mode("view")
 tm_basemap(leaflet::providers$CartoDB.Positron)+
 tm_shape(mapa)+
-  tm_dots("proc.zajetych", size = "lozka", id="szpital",alpha=0.5,scale=1.5,
-          clustering = F,
+  tm_dots("proc.zajetych", size = "lozka", id="szpital", alpha=0.5,scale=1.5,
+          clustering = F, jitter = 0.05,
           n=10,legend.format=list(fun=function(x) paste0(formatC(x*100, digits=0, format="f"), "%")), palette = "viridis",
           popup.vars = c("Obwód", "przystosowane łóżka"="lozka", "zajęte łóżka"="lozka.zajete", "odsetek zajętych łóżek"="proc.etykieta"),
           title="Stopień zapełnienia <br>łóżek")+
@@ -1290,7 +1296,7 @@ testy.maks <- testy.suma %>%
  
 ```
 
-Według stanu na `r format(unique(ilosc.testow$data),"%d-%m-%Y")` Ukraina przeprowadziła **`r format(sum(testy.maks$PLR.cum), big.mark=",")`** testów metodą RT-PCR. Choć liczba ta waha się znacznie w zależności od dnia tygodnia, jednak od początku lipca można zaobserować jej systematyczny wzrost i pod koniec września ustabilizowała się na poziomie około 25 tys. testów na dobę. 
+Według stanu na `r format(unique(ilosc.testow$data),"%d-%m-%Y")` Ukraina przeprowadziła **`r format(sum(testy.maks$PLR.cum), big.mark=",")`** testów metodą RT-PCR. Choć liczba ta waha się znacznie w zależności od dnia tygodnia, jednak od początku lipca można zaobserować jej systematyczny wzrost i w połowie października ustabilizowała się na poziomie około 30 tys. testów na dobę. 
 Wykrywalność przypadków zakażenia w całym kraju wynosi **`r paste0(wykrywalnosc.etykieta*100, "%")`**. Jest to bardzo wysoki poziom - według zaleceń WHO jedynie ilość pozytywnych testów poniżej 5% świadczy o tym, że sytuacja epidemiologiczna jest pod kontrolą.  
 
 ```{r}
