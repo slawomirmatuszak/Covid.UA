@@ -1505,26 +1505,26 @@ W porównaniu do krajów sąsiadujących, Ukraina robi stosunkowo mało testów.
 load("E:/R/Covid.Ukraina/dane/test.swiat.Rda")
 
 UA <- test.swiat %>%
-  filter(Państwo == "Ukraina")
+  filter(Panstwo == "Ukraina")
 
 b <- test.swiat %>%
-  filter(Państwo != "Ukraina")%>%
-  group_by(Państwo)%>%
+  filter(Panstwo != "Ukraina")%>%
+  group_by(Panstwo)%>%
   filter(data ==max(data))%>%
   arrange(test.per.th)
 
-test.swiat$Państwo <- ordered(test.swiat$Państwo, levels = b$Państwo)
+test.swiat$Panstwo <- ordered(test.swiat$Panstwo, levels = b$Panstwo)
 
-d<- highlight_key(test.swiat, ~Państwo)
+d<- highlight_key(test.swiat, ~Panstwo)
 
 plot_ly()%>%
-  add_trace(data=d, x = ~data, y = ~test.per.th, color = ~Państwo,
+  add_trace(data=d, x = ~data, y = ~test.per.th, color = ~Panstwo,
             type = "scatter",
             mode = "line",
             hoverinfo = 'text',
             text = ~paste('</br> data: ', data,
                           '</br> testy na tys. mieszkańców: ', paste0(round(test.per.th,2)),
-                          '</br> Państwo: ', Państwo))%>%
+                          '</br> Państwo: ', Panstwo))%>%
   add_trace(data=UA, x = ~data, y = ~test.per.th,
             color=I("red"),
             #showlegend = FALSE,
@@ -1535,7 +1535,7 @@ plot_ly()%>%
             hoverinfo = 'text',
             text = ~paste('</br> data: ', data,
                           '</br> testy na tys. mieszkańców: ', paste0(round(test.per.th,2)),
-                          '</br> Państwo: ', Państwo))%>%
+                          '</br> Państwo: ', Panstwo))%>%
   highlight(on = "plotly_click", off = "plotly_deselect", color = "blue", opacityDim=0.5)%>% 
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)%>% 
@@ -1551,13 +1551,13 @@ Mimo ograniczonej liczby przeprowadzanych testów, wykrywalność jest bardzo wy
 
 ```{r fig.width=7, fig.height=4}
 plot_ly()%>%
-  add_trace(data=d, x = ~data, y = ~wykrywalnosc, color = ~Państwo,
+  add_trace(data=d, x = ~data, y = ~wykrywalnosc, color = ~Panstwo,
             type = "scatter",
             mode = "line",
             hoverinfo = 'text',
             text = ~paste('</br> data: ', data,
                           '</br> wykrywalność: ', paste0(round(wykrywalnosc*100,1), "%"),
-                          '</br> Państwo: ', Państwo))%>%
+                          '</br> Państwo: ', Panstwo))%>%
   add_trace(data=UA, x = ~data, y = ~wykrywalnosc,
             color=I("red"),
             #showlegend = FALSE,
@@ -1568,7 +1568,7 @@ plot_ly()%>%
             hoverinfo = 'text',
             text = ~paste('</br> data: ', data,
                           '</br> wykrywalność: ', paste0(round(wykrywalnosc*100,1), "%"),
-                          '</br> Państwo: ', Państwo))%>%
+                          '</br> Państwo: ', Panstwo))%>%
   highlight(on = "plotly_click", off = "plotly_deselect", color = "blue", opacityDim=0.5)%>% 
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)%>% 
