@@ -409,13 +409,16 @@ girafe(code = print(my_gg),width_svg = 8, height_svg = 5 )
 ```
 ```{r}
 load("E:/R/Covid.Ukraina/dane/miasta.tydzien.Rda")
+load("E:/R/Covid.Ukraina/dane/tlumaczenie.miejscowosci.Rda")
 kijow <- tydzien %>%
   filter(Kod=="UA80")%>%
   select(registration_area=obwod, registration_region=obwod, registration_settlement=obwod, nowe=roznica)%>%
   mutate(lon = 30.534058,
          lat = 50.449196)%>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
-miasta.tydzien <- bind_rows(miasta.tydzien, kijow)
+miasta.tydzien <- bind_rows(miasta.tydzien, kijow)%>%
+  left_join(tlumaczenie.miejscowosci, by="id")%>%
+  mutate(nazwa.pl = if_else(nazwa.pl=="Zostać określone", "lokacja niejednoznaczna", nazwa.pl))
 ```
 
 
@@ -425,7 +428,7 @@ Należy przy tym pamiętać, że ogniska epidemii są bardzo rozproszone. W cią
 tmap_mode("view")
 tm_basemap(leaflet::providers$CartoDB.Positron)+
   tm_shape(miasta.tydzien)+
-  tm_dots("nowe", size = "nowe", id="registration_settlement",alpha=0.5,scale=2,
+  tm_dots("nowe", size = "nowe", id="nazwa.pl",alpha=0.5,scale=2,
           clustering = F,
           col = "red",
           #n=10,legend.format=list(fun=function(x) paste0(formatC(x, digits=0, format="f"))), palette = "viridis",
@@ -693,6 +696,7 @@ girafe( ggobj = plot_grid(my_gg, my_gg2), width_svg = 8, height_svg = 4)
 
 ```{r}
 choroby.wspol <- szpitale.zgony %>%
+  mutate(add_conditions = if_else(add_conditions=="brak chorĂłb wspĂłĹ‚istniejÄ…cych", "brak chorób współistniejących", "choroby współistniejące"))%>%
   filter(add_conditions=="choroby współistniejące")%>%
   summarise(
     zgony = sum(new_death)
@@ -713,6 +717,7 @@ Poza wiekiem, drugim czynnikiem wpływającym na ilość zgonów na Covid-19 jes
 
 ```{r}
 a <- szpitale.zgony %>%
+  mutate(add_conditions = if_else(add_conditions=="brak chorĂłb wspĂłĹ‚istniejÄ…cych", "brak chorób współistniejących", "choroby współistniejące"))%>%
   mutate(etykieta = paste0("śmiertelność - ", round(smiertelnosc*100,1), "%","\nzgony - ", new_death))
 
 wykres <- ggplot(a)+
@@ -943,11 +948,15 @@ Zaznaczyć należy przy tym, że w przypadku pojedynczych szpitali ich zapełnie
 ```{r}
 load("E:/R/Covid.Ukraina/dane/szpitale.Rda")
 load("E:/R/Covid.Ukraina/dane/szpitale.geo.Rda")
+load("E:/R/Covid.Ukraina/dane/tlumaczenie.szpitale.Rda")
 
 a <- szpitale %>%
   filter(data==max(data, na.rm=T))%>%
   select(3,19:29)%>%
-  left_join(szpitale.geo, by=c("kod"="kod.EDRPOU"))
+  left_join(szpitale.geo, by=c("kod"="kod.EDRPOU"))%>%
+  left_join(tlumacznie.szpitale, by = "kod")%>%
+  mutate(lon= if_else(grepl("Winnickie Regionalne Specjalistyczne Terytorialne", tlumaczenie)==T, 28.452390, lon),
+         lat= if_else(grepl("Winnickie Regionalne Specjalistyczne Terytorialne", tlumaczenie)==T, 49.256411, lat))
 
 ```
 
@@ -968,7 +977,7 @@ mapa <- a %>%
 tmap_mode("view")
 tm_basemap(leaflet::providers$CartoDB.Positron)+
 tm_shape(mapa)+
-  tm_dots("proc.zajetych", size = "lozka", id="szpital", alpha=0.5,scale=1.5,
+  tm_dots("proc.zajetych", size = "lozka", id="tlumaczenie", alpha=0.5,scale=1.5,
           clustering = F, jitter = 0.05,
           n=10,legend.format=list(fun=function(x) paste0(formatC(x*100, digits=0, format="f"), "%")), palette = "viridis",
           popup.vars = c("Obwód", "przystosowane łóżka"="lozka", "zajęte łóżka"="lozka.zajete", "odsetek zajętych łóżek"="proc.etykieta"),
