@@ -76,7 +76,7 @@ c <- obwody.wide %>%
 
 ## Sytuacja ogólna
 
-Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2+1, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia i **pięć tysiący** w połowie października 2000 r. 
+Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2+1, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia, **trzy tysiące** w połowie września i **sześć tysiecy** w drugiej połowie października 2000 r. 
 
 ```{r średnia krocząca dla UA}
 #średnia krocząca dla UA
@@ -418,7 +418,8 @@ kijow <- tydzien %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
 miasta.tydzien <- bind_rows(miasta.tydzien, kijow)%>%
   left_join(tlumaczenie.miejscowosci, by="id")%>%
-  mutate(nazwa.pl = if_else(nazwa.pl=="Zostać określone", "lokacja niejednoznaczna", nazwa.pl))
+  mutate(nazwa.pl = if_else(nazwa.pl=="Zostać określone", "lokacja niejednoznaczna", nazwa.pl),
+         nazwa.pl = if_else(registration_settlement=="Kijów", "Kijów", nazwa.pl))
 ```
 
 
@@ -966,7 +967,8 @@ mapa <- a %>%
   filter(!is.na(lon))%>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)%>%
   filter(lozka>0)%>%
-  mutate(proc.etykieta = paste0(round(proc.zajetych*100,1), "%"))
+  mutate(proc.zajetych = if_else(proc.zajetych>1, 1, proc.zajetych),
+         proc.etykieta = paste0(round(proc.zajetych*100,1), "%"))
 
 
 ```
@@ -1379,6 +1381,7 @@ plot_ly(testy.suma)%>%
     legend = list(bgcolor = 'rgba(0,0,0,0)', orientation = "h",
                   xanchor = "center",  # use center of legend as anchor
                      x = 0.5, y=100),
+    hovermode = 'compare',
     #title = "<b>Porównanie ilości dziennych zakażeń i testów</b>", 
     yaxis2 = ay,
     xaxis = list(title=""),
@@ -1391,6 +1394,8 @@ plot_ly(testy.suma)%>%
 ```
 
 ### Testy w regionach
+
+Można zaobserwować bardzo duże dysproporcje w zależności od regionu w ilości przeprowadzonych testów w stosunku do liczby mieszkańców. Jeśli wziąć pod uwagę dane o testach i nowych zakażeniach z ostatnich **14 dni**, widać wyraźnie, że w niektórych obwodach  stosunkowo duża ilość testów nie doprowadziła do znaczącego zwiększenia ilości zakażonych. Szczególnym przykładem pod tym względem jest Kijów. Jednocześnie w niektórych obwodach niewielka ilość testów spowodowała wykrycie wielu zakażonych. Na tym tle wyróżnia się obwód kirowohradzki, gdzie robi się bardzo mało testów i mają one niewielką wykrywalność. 
 
 ```{r}
 
@@ -1458,6 +1463,64 @@ obwody.lipiec <- obwody.wide %>%
 
 ```
 
+```{r obwody 14 dni}
+filtr.dat <- testy.calosc %>%
+  ungroup()%>%
+  select(data)%>%
+  filter(data>max(data-14))%>%
+  unique()%>%
+  pull()
+
+dwa.tygodnie <- obwody.wide %>%
+  filter(data %in% filtr.dat)%>%
+  select(obwod, population, zakazenia = nowe.suma.chorych)%>%
+  group_by(obwod, population)%>%
+  summarise(
+    zakazenia = sum(zakazenia)
+  )%>%
+  mutate(zakazenia.100 = round(zakazenia*1e5/population))%>%
+  ungroup()
+
+dwa.tygodnie.testy <- testy.calosc %>%
+  ungroup()%>%
+  select(data, obwod = 8, PLR.dzienne)%>%
+  filter(data %in% filtr.dat)%>%
+  group_by(obwod)%>%
+  summarise(
+    testy = sum(PLR.dzienne)
+  ) %>%
+  left_join(dwa.tygodnie, by="obwod")%>%
+  mutate(testy.100 = round(testy*1e5/population))
+
+```
+
+```{r fig.width=7, fig.height=4}
+plot_ly() %>%
+  add_trace(data = dwa.tygodnie.testy, x= ~testy.100, y= ~ zakazenia.100, size = ~zakazenia, #color = ~obwod,
+            type="scatter",
+            mode = "markers",
+            hoverinfo = 'text',
+            text = ~paste('</br> obwód: ', obwod,
+                          '</br> testy na 100 tys. mieszkańców: ', testy.100,
+                          '</br> zakażenia na 100 tys mieszkańców: ', zakazenia.100),
+            showlegend = T) %>%
+  config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
+         displaylogo=F)%>% 
+  layout(xaxis = list(title="testy na 100 tys. mieszkańców"), 
+         yaxis = list(title="zakażenia na 100 tys. mieszkańców"), 
+         title = "<b>Zakażenia w stosunku do liczby testów w ciągu ostatnich 14 dni</b>",
+         #showlegend = FALSE,
+         annotations = list(text = "Dane: Ministerstwo Zdrowia Ukrainy",showarrow = F, 
+                            xref='paper', yref='paper',
+                            xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
+```
+
+```{r fig.width=8, fig.height=4, include=F}
+ggplot(dwa.tygodnie.testy, aes(x=testy.100, y=zakazenia.100))+
+  geom_point(aes(size = zakazenia, color=testy))+
+  geom_label_repel(aes(label=obwod))+
+  theme_bw()
+```
 
 
 ```{r}
