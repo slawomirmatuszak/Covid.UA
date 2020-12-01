@@ -76,7 +76,7 @@ c <- obwody.wide %>%
 
 ## Sytuacja ogólna
 
-Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2+1, "%d"))` `r if_else(unique(format(a$data2, "%B"))=="październik", paste("października"), paste("listopada")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r sum(b$suma.zgonow)`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia, **trzy tysiące** w połowie września i **sześć tysiecy** w drugiej połowie października 2000 r. 
+Wedug danych Ministerstwa Zdrowia Ukrainy z `r unique(format(a$data2+1, "%d"))` `r if_else(unique(format(Sys.Date(), "%B"))=="grudzień", paste("grudnia"), paste("stycznia")) ` `r unique(format(a$data2, "%Y"))` roku od początku epidemii na Ukrainie zanotowano w sumie **`r format(as.integer(sum(a$liczba)), big.mark = ",")`** przypadków zakażenia wirusem SARS-CoV-2 , z czego **`r format(as.integer(sum(b$suma.zgonow)), big.mark = ",")`** osób zmarło i **`r format(sum(c$suma.wyzdrowien), big.mark=",")`** się wyleczyło. Wzrost nowych zakażeń po wprowadzeniu lockdownu pod koniec marca udało się powstrzymać, jednak pod koniec maja zaczęły się one systematycznie zwiększać, by pod koniec lipca przekroczyć poziom **tysiąc** zakażeń dziennie, **dwa tysiące** pod koniec sierpnia, **trzy tysiące** w połowie września, **siedem tysiecy** pod koniec października i **jedenaście tysięcy** w połowie listopada 2020 r. 
 
 ```{r średnia krocząca dla UA}
 #średnia krocząca dla UA
@@ -226,6 +226,57 @@ plot_ly(a)%>%
   ) %>%
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)
+```
+
+```{r}
+wyleczeni <- obwody.wide %>%
+  group_by(data) %>%
+  summarise(
+    wyleczeni = sum(nowe.suma.wyzdrowien),
+    zakazeni = sum(nowe.suma.chorych)
+  ) %>%
+  mutate(wyleczeni.srednia = zoo::rollmean(wyleczeni, k=7, fill=NA, align="right"),
+         zakazeni.srednia = zoo::rollmean(zakazeni, k=7, fill=NA, align="right"))
+
+zakazeni <- wyleczeni %>%
+  mutate(data2 = data+30) %>%
+  filter(data2 < Sys.Date()-1)
+```
+
+```{r porownanie zakazen sprzed 30 dni i wyleczen, fig.width=7, fig.height=4, include= F}
+
+plot_ly()%>%
+  add_trace(data = zakazeni, x=~data2, y=~zakazeni.srednia, name = "średnia zakażeń z przesunięciem 30 dni",
+            color = I("orange"),
+            hoverinfo = 'text',
+            mode = "lines",
+        type = "scatter",
+        text = ~paste('</br> data: ', data,
+                      '</br> dzienne wyleczenia : ', round(zakazeni.srednia)))%>%
+  add_trace(data = wyleczeni, x=~data, y=~wyleczeni.srednia, name = "średnia wyzdrowień",
+            color = I("green"),
+            hoverinfo = 'text',
+            mode = "line",
+        type = "scatter",
+        #line = list(width = 5), 
+        text = ~paste('</br> data: ', data,
+                      '</br> średnia wyleczonych: ', round(wyleczeni.srednia)))%>%
+  layout(
+    legend = list(bgcolor = 'rgba(0,0,0,0)', orientation = "h",
+                  xanchor = "center",  # use center of legend as anchor
+                     x = 0.5, y=100),
+    #title = "<b>Porównanie ilości dziennych zakażeń i testów</b>", 
+    hovermode = 'x',
+    xaxis = list(title=""),
+    yaxis = list(title = "",
+                 tickfont = list(color = "black"),
+                 tickformat=",d"),
+    annotations = list(text = "Dane: Ministerstwo Zdrowia Ukrainy",showarrow = F, xref='paper', yref='paper', 
+      xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1)
+  ) %>%
+  config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
+         displaylogo=F)
+
 ```
 
 
@@ -381,7 +432,7 @@ tydzien <- obwody.wide %>%
 
 ```
 
-W ciągu ostatniego tygodnia najwięcej nowych przypadków zakażeń jest `r if_else(tydzien[1,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", tydzien[1,1], "m"))` **(`r format(pull(tydzien[1,2]), big.mark=",")`)** oraz `r if_else(tydzien[2,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", tydzien[2,1], "m"))` **(`r format(pull( tydzien[2,2]), big.mark=",")`)** i `r if_else(tydzien[3,1]=="Kijów", paste("w Kijowie"), paste0("obwodzie ", tydzien[3,1], "m"))` **(`r format(pull( tydzien[3,2]), big.mark=",")`)**. W przeciwieństwie do pierwszych miesięcy pandemii, kiedy zakażenia miały miejsce głównie na Zachodniej Ukrainie i Kijowie, obecnie coraz więcej przypadków wykrywa się na północy oraz w obwodzie charkowskim, dniepropetrowskim i odeskim.
+W ciągu ostatniego tygodnia najwięcej nowych przypadków zakażeń jest `r if_else(tydzien[1,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", tydzien[1,1], "m"))` **(`r format(pull(tydzien[1,2]), big.mark=",")`)** oraz `r if_else(tydzien[2,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", tydzien[2,1], "m"))` **(`r format(pull( tydzien[2,2]), big.mark=",")`)** i `r if_else(tydzien[3,1]=="Kijów", paste("w Kijowie"), paste0("obwodzie ", tydzien[3,1], "m"))` **(`r format(pull( tydzien[3,2]), big.mark=",")`)**. W przeciwieństwie do pierwszych miesięcy pandemii, kiedy zakażenia miały miejsce głównie na Zachodniej Ukrainie i Kijowie, obecnie coraz więcej przypadków wykrywa się na północy oraz w obwodzie charkowskim i odeskim.
 
 ```{r, fig.width=8, fig.height=5}
 wykres <- ggplot() + 
@@ -446,7 +497,7 @@ d <- a %>%
   select(2,17)
 ```
 
-Najwięcej aktywnych przypadków zakażnia w przeliczeniu na 100 tys. mieszkańców jest `r if_else(d[1,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[1,1], "m"))` **(`r format(pull(d[1,2]), big.mark=",")`)** oraz `r if_else(d[2,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[2,1], "m"))` **(`r format(pull( d[2,2]), big.mark=",")`)** i `r if_else(d[3,1]=="Kijów", paste("w Kijowie"), paste0("obwodzie ", d[3,1], "m"))` **(`r format(pull( d[3,2]), big.mark=",")`)**. Nadal najbardziej dotknięta epidemią jest Zachodnia Ukraina, w coraz większym stopniu północna część kraju oraz obwód charkowski i odeski. W porównaniu do początku lata, obecnie jest tylko kilka obwodów, które zostały w niewielkim stopniu dotknięte epidemią. 
+Najwięcej aktywnych przypadków zakażnia w przeliczeniu na 100 tys. mieszkańców jest `r if_else(d[1,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[1,1], "m"))` **(`r format(pull(d[1,2]), big.mark=",")`)** oraz `r if_else(d[2,1]=="Kijów", paste("w Kijowie"), paste0("w obwodzie ", d[2,1], "m"))` **(`r format(pull( d[2,2]), big.mark=",")`)** i `r if_else(d[3,1]=="Kijów", paste("w Kijowie"), paste0("obwodzie ", d[3,1], "m"))` **(`r format(pull( d[3,2]), big.mark=",")`)**. Epidemia na Zachodniej Ukrainie stopniowo słabnie, natomiast w coraz większym stopniu północna część kraju oraz obwód charkowski i odeski. W porównaniu do początku lata, obecnie jest tylko kilka obwodów, które zostały w niewielkim stopniu dotknięte epidemią. 
 
 ```{r, fig.width=8, fig.height=5}
 wykres <- ggplot() + 
@@ -539,7 +590,7 @@ b <- a %>%
 a$obwod <- ordered(a$obwod, levels = b$obwod)
 ```
 
-W większości obwodów na Zachodniej Ukrainie utrzymuje się niezmiennie wysoki poziom dziennych nowych zakażeń. W ostatnich dwóch miesiącach zauważalny wzrost nastąpił także w obwodzie charkowskim i na Północnej Ukrainie (obwód sumski i czernihowski).  
+W większości obwodów na Zachodniej Ukrainie utrzymuje się niezmiennie wysoki poziom dziennych nowych zakażeń. W ostatnich dwóch miesiącach zauważalny wzrost nastąpił praktycznie we wszyskich obwodach.  
 
 ```{r fig.width=7, fig.height=5, include=F}
 ggplot(filter(a), aes(x=data, y=srednia))+
@@ -574,7 +625,7 @@ fig <- plot_ly(f, x = ~data, y = ~srednia, color = ~obwod,
   highlight(on = "plotly_click", off = "plotly_deselect", color = "red", opacityDim=0.7)%>% 
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)%>% 
-  layout(yaxis = list(title="dzienny przyrost"), xaxis = list(title=""), title = "Liczba dziennych zakażeń na 100 tys. mieszkańców w obwodach",
+  layout(yaxis = list(title="dzienny przyrost"), xaxis = list(title=""), title = "<b>Liczba dziennych zakażeń na 100 tys. mieszkańców w obwodach<b>",
          annotations = list(text = "Dane: Ministerstwo Zdrowia Ukrainy",showarrow = F, xref='paper', yref='paper', 
       xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 
@@ -626,7 +677,7 @@ zgony.grupa.wiekowa <- szpitale.zgony %>%
          etykieta2 = paste0("wiek - ", person_age_group, "\nzakażenia - ", zakazenia))
 ```
 
-Od początku epidemii na Ukrainie zmarło na Covid-19 **`r sum(b$suma.zgonow)`** osób. Wraz ze wzrostem nowych zakażeń zaczęła rosnąć liczba zgonów.  
+Od początku epidemii na Ukrainie zmarło na Covid-19 **`r format(as.integer(sum(b$suma.zgonow)), big.mark = ",")`** osób. Wraz ze wzrostem nowych zakażeń zaczęła rosnąć liczba zgonów.  
 
 
 ```{r fig.width=7, fig.height=4}
@@ -660,6 +711,65 @@ plot_ly(zgony.srednia)%>%
   ) %>%
   config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
          displaylogo=F)
+```
+
+```{r porównanie liczby zgonów na tle sąsiadów}
+
+UA <- zgony.srednia %>%
+  mutate(zgony.srednia.100 = nowe.zgony.srednia*1e5/37289000,
+         Państwo = "Ukraina") %>%
+  filter(data > "2020-04-30")
+
+sasiedzi <- covid.ECDC %>%
+  filter(Państwo %in% c("Rosja", "Polska", "Białoruś", "Słowacja", "Węgry", "Mołdawia", "Rumunia"))%>%
+  ungroup()%>%
+  filter(data>"2020-04-30") %>%
+  select(data, Państwo, population, deaths) %>%
+  group_by(Państwo) %>%
+  mutate(zgony.srednia = zoo::rollmean(deaths, fill=NA, k=7, align = "right"),
+         zgony.srednia.100 = zgony.srednia*1e5/population) %>%
+  select(data, Państwo, zgony.srednia.100)
+
+sasiedzi.kolejnosc <- sasiedzi %>%
+  group_by(Państwo)%>%
+  filter(data == max(data))%>%
+  arrange(zgony.srednia.100)
+
+sasiedzi$Państwo <- ordered(sasiedzi$Państwo, levels = sasiedzi.kolejnosc$Państwo)
+
+sasiedzi <- highlight_key(sasiedzi, ~Państwo)
+
+```
+
+Mimo obserwowanego dziennego wzrostu liczby zmarłych, Ukraina nie wyróżnia się na tle sąsiadów pod wględem liczby zgonów na Covid-19 w stosunku do liczby mieszkańców.  
+
+```{r fig.width=7, fig.height=4}
+plot_ly()%>%
+  add_trace(data=sasiedzi, x = ~data, y = ~zgony.srednia.100, color = ~Państwo,
+            type = "scatter",
+            mode = "line",
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> dzienne zgony: ', paste0(round(zgony.srednia.100,2)),
+                          '</br> Państwo: ', Państwo))%>%
+  add_trace(data=UA, x = ~data, y = ~zgony.srednia.100,
+            color=I("red"),
+            #showlegend = FALSE,
+            name = "Ukraina",
+            type = "scatter",
+            mode = "line",
+            line = list(width = 4),
+            hoverinfo = 'text',
+            text = ~paste('</br> data: ', data,
+                          '</br> dzienne zgony: ', paste0(round(zgony.srednia.100,2)),
+                          '</br> Państwo: ', Państwo)) %>%
+  highlight(on = "plotly_click", off = "plotly_deselect", color = "blue", opacityDim=0.5)%>% 
+  config(locale = 'pl',modeBarButtonsToRemove = c("zoomIn2d", "zoomOut2d", "autoScale2d", "toImage", "lasso2d","select2d"),
+         displaylogo=F)%>% 
+  layout(yaxis = list(title="dzienny przyrost"), xaxis = list(title=""), title = "<b>Liczba dziennych* zgonów na 100 tys. mieszkańców</b>",
+         #showlegend = FALSE,
+         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, ECDC",showarrow = F, xref='paper', yref='paper',
+                            xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 ```
 
 
@@ -713,7 +823,7 @@ choroby.wspol.brak <- szpitale.zgony %>%
 ```
 
 
-Poza wiekiem, drugim czynnikiem wpływającym na ilość zgonów na Covid-19 jest obecność chorób współistniejących (dotyczy to **`r choroby.wspol`** zmarłych osób, czyli **`r paste0(round(choroby.wspol/sum(b$suma.zgonow)*100,1),"%")`**). Ma to ogromne znaczenie we wskaźniku śmiertelności, który jest bardzo niski dla osób poniżej 60 roku życia, bez chorób współistniejących i wysoki dla osób z takimi chorobami, szczególnie w starszym wieku. 
+Poza wiekiem, drugim czynnikiem wpływającym na ilość zgonów na Covid-19 jest obecność chorób współistniejących (dotyczy to **`r format(as.integer(choroby.wspol), big.mark = ",")`** zmarłych osób, czyli **`r paste0(round(choroby.wspol/sum(b$suma.zgonow)*100,1),"%")`**). Ma to ogromne znaczenie we wskaźniku śmiertelności, który jest bardzo niski dla osób poniżej 60 roku życia, bez chorób współistniejących i wysoki dla osób z takimi chorobami, szczególnie w starszym wieku. 
 
 
 ```{r}
@@ -944,7 +1054,7 @@ plot_ly(szpital.lozka)%>%
 ```
 
 
-Zaznaczyć należy przy tym, że w przypadku pojedynczych szpitali ich zapełnienie przekracza 80%, a nawet sięga 100%, przy czym nie dotyczy to wyłącznie Zachodniej Ukrainy. 
+Zaznaczyć należy przy tym, że w przypadku pojedynczych szpitali ich zapełnienie przekracza 80%, a nawet sięga 100%, przy czym dotyczy to różnych regionów Ukrainy. 
 
 ```{r}
 load("E:/R/Covid.Ukraina/dane/szpitale.Rda")
@@ -1105,7 +1215,7 @@ respiratory <- szpitale %>%
 
 ```
 
-Mimo rosnącej ilości chorych na Covid w szpitalach, odsetek pacjentów w stanie ciężkim, którzy korzystają z respiratora systematycznie się zmniejsza. 
+Mimo rosnącej ilości chorych na Covid w szpitalach, odsetek pacjentów w stanie ciężkim, którzy korzystają z respiratora znacząco się zmniejszył w porównaniu do czerwca i utrzymuje się na stabilnym poziomie. 
 
 ```{r fig.width=7, fig.height=4}
 ay <- list(
@@ -1307,7 +1417,7 @@ testy.maks <- testy.suma %>%
  
 ```
 
-Według stanu na `r format(unique(ilosc.testow$data),"%d-%m-%Y")` Ukraina przeprowadziła **`r format(sum(testy.maks$PLR.cum), big.mark=",")`** testów metodą RT-PCR. Choć liczba ta waha się znacznie w zależności od dnia tygodnia, jednak od początku lipca można zaobserować jej systematyczny wzrost i w połowie października ustabilizowała się na poziomie około 30 tys. testów na dobę. 
+Według stanu na `r format(unique(ilosc.testow$data),"%d-%m-%Y")` Ukraina przeprowadziła **`r format(test.max, big.mark=",")`** testów metodą RT-PCR. Choć liczba ta waha się znacznie w zależności od dnia tygodnia, jednak od początku lipca można zaobserować jej systematyczny wzrost i od połowy października utrzymuje się na poziomie ponad 40 tys. testów na dobę. 
 Wykrywalność przypadków zakażenia w całym kraju wynosi **`r paste0(wykrywalnosc.etykieta*100, "%")`**. Jest to bardzo wysoki poziom - według zaleceń WHO jedynie ilość pozytywnych testów poniżej 5% świadczy o tym, że sytuacja epidemiologiczna jest pod kontrolą.  
 
 ```{r}
@@ -1349,7 +1459,7 @@ girafe( ggobj = plot_grid(my_gg2, my_gg1), width_svg = 8, height_svg = 4)
 
 ```
 
-Ilość robionych testów jest bezpośrednio powiązana z wykrywaniem nowych przypadków zakażeń. Rekordowa ilość testów w październiku doprowadziła do rekordowej ilości zakażeń. 
+Ilość robionych testów jest bezpośrednio powiązana z wykrywaniem nowych przypadków zakażeń. Rekordowa ilość testów w listopadzie doprowadziła do rekordowej ilości zakażeń. 
 
 ```{r fig.width=7, fig.height=4}
 
@@ -1395,7 +1505,7 @@ plot_ly(testy.suma)%>%
 
 ### Testy w regionach
 
-Można zaobserwować bardzo duże dysproporcje w zależności od regionu w ilości przeprowadzonych testów w stosunku do liczby mieszkańców. Jeśli wziąć pod uwagę dane o testach i nowych zakażeniach z ostatnich **14 dni**, widać wyraźnie, że w niektórych obwodach  stosunkowo duża ilość testów nie doprowadziła do znaczącego zwiększenia ilości zakażonych. Szczególnym przykładem pod tym względem jest Kijów. Jednocześnie w niektórych obwodach niewielka ilość testów spowodowała wykrycie wielu zakażonych. Na tym tle wyróżnia się obwód kirowohradzki, gdzie robi się bardzo mało testów i mają one niewielką wykrywalność. 
+Można zaobserwować bardzo duże dysproporcje w zależności od regionu w ilości przeprowadzonych testów w stosunku do liczby mieszkańców. Jeśli wziąć pod uwagę dane o testach i nowych zakażeniach z ostatnich **14 dni**, widać wyraźnie, że w niektórych obwodach  stosunkowo duża ilość testów nie doprowadziła do znaczącego zwiększenia ilości zakażonych. Szczególnym przykładem pod tym względem jest Kijów. Jednocześnie w niektórych obwodach niewielka ilość testów spowodowała wykrycie wielu zakażonych. Na tym tle wyróżnia się obwód ługański, gdzie robi się bardzo mało testów i mają one niewielką wykrywalność. 
 
 ```{r}
 
@@ -1614,11 +1724,11 @@ plot_ly()%>%
   layout(yaxis = list(title="dzienne testy"), xaxis = list(title="",type = 'date', tickformat = "%d/%m"), 
          title = "<b>Liczba dziennych* testów na tys. mieszkańców</b>",
          #showlegend = FALSE,
-         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data",showarrow = F, xref='paper', yref='paper',
+         annotations = list(text = "* średnia z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data, @micalrg",showarrow = F, xref='paper', yref='paper',
                             xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 ```
 
-Mimo ograniczonej liczby przeprowadzanych testów, wykrywalność jest bardzo wysoka. Odsetek pozytywnych testów jest większy niż w jakimkolwiek państwie sąsiadującym z Ukrainą. 
+Mimo ograniczonej liczby przeprowadzanych testów, wykrywalność jest bardzo wysoka. Odsetek pozytywnych testów należy do najwyższych wśród państw sąsiadujących z Ukrainą. 
 
 
 ```{r fig.width=7, fig.height=4}
@@ -1648,7 +1758,7 @@ plot_ly()%>%
          xaxis = list(title="",type = 'date', tickformat = "%d/%m"), 
          title = "<b>Odsetek* pozytywnych testów</b>",
          #showlegend = FALSE,
-         annotations = list(text = "* średnia ruchoma z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data",showarrow = F, xref='paper', yref='paper',
+         annotations = list(text = "* średnia z 7 dni; Dane: Ministerstwo Zdrowia Ukrainy, Our World in Data, @micalrg",showarrow = F, xref='paper', yref='paper',
                             xanchor='right', yanchor='auto', xshift=0, yshift=0, x = 1, y = -0.1))
 ```
 
